@@ -415,4 +415,107 @@ button:disabled {
 #time-left {
     color: #e74c3c;
     font-weight: bold;
+}
+
+.ketchup-pool {
+    position: absolute;
+    background: rgba(255, 0, 0, 0.3);
+    border-radius: 50%;
+    pointer-events: none;
+    animation: pulsate 2s infinite;
+}
+
+.grill-hazard {
+    position: absolute;
+    background: repeating-linear-gradient(
+        45deg,
+        #333,
+        #333 10px,
+        #666 10px,
+        #666 20px
+    );
+    animation: glow 1s infinite;
+}
+
+@keyframes glow {
+    0% { box-shadow: 0 0 10px #f00; }
+    50% { box-shadow: 0 0 20px #f00; }
+    100% { box-shadow: 0 0 10px #f00; }
+}
+
+/* Add rainbow mode for high scores */
+.rainbow-mode {
+    animation: rainbow-bg 2s linear infinite;
+}
+
+@keyframes rainbow-bg {
+    0% { background: #ff0000; }
+    20% { background: #ff9900; }
+    40% { background: #ffff00; }
+    60% { background: #33ff00; }
+    80% { background: #0099ff; }
+    100% { background: #ff0000; }
+}
+
+.mega-combo {
+    font-size: 48px !important;
+    text-shadow: 0 0 20px #ff0;
+    animation: mega-pulse 0.5s infinite;
+}
+
+@keyframes mega-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.5); }
+    100% { transform: scale(1); }
+}
+
+/* Boss styles */
+.sausage-boss {
+    filter: hue-rotate(90deg);
+    box-shadow: 0 0 20px #ff0;
+}
+
+.boss-health {
+    position: absolute;
+    width: 100px;
+    height: 10px;
+    background: #333;
+    border: 2px solid #fff;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.health-fill {
+    width: 100%;
+    height: 100%;
+    background: #f00;
+    transition: width 0.3s;
+}
+
+.wave-message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 72px;
+    color: #fff;
+    text-shadow: 0 0 20px #f00;
+    animation: wave-pulse 2s forwards;
+    z-index: 1000;
+}
+
+@keyframes wave-pulse {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+.mustard-projectile {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: #ffdb4d;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #ff0;
 } 
