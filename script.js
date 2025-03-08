@@ -45,6 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameMode = 'classic'; // classic, frenzy, boss, survival
     let bossSpawned = false;
     let difficultyMultiplier = 1;
+    let frenzyMultiplier = 1;
+    let frenzyComboTimer = null;
+    let rainbowIntensity = 0;
+    let selectedMode = 'classic';
+    let activeComboMessages = [];
 
     // Game area dimensions
     const gameAreaRect = gameArea.getBoundingClientRect();
@@ -84,12 +89,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Set up game based on mode
         switch(gameMode) {
             case 'frenzy':
-                // Double speed everything, half the time
+                // SUPER SPEED EVERYTHING
                 playerSpeed = 16;
                 gameTimeInSeconds = 60;
                 totalSausagePeople = 1000;
                 difficultyMultiplier = 2;
+                frenzyMultiplier = 1;
                 document.body.classList.add('rainbow-mode');
+                // Start the frenzy effects
+                startFrenzyEffects();
                 break;
             
             case 'boss':
@@ -472,15 +480,9 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(comboTimer);
             
             // Show combo message
-            const comboMsg = document.createElement('div');
-            comboMsg.className = 'combo-message';
-            comboMsg.textContent = `${comboCount}x COMBO!`;
-            if (comboCount > 10) comboMsg.classList.add('mega-combo');
-            gameArea.appendChild(comboMsg);
+            createComboMessage(comboCount);
             
-            // Extra points for combos
-            score += 10 * comboCount;
-            
+            // Reset combo after 2 seconds
             comboTimer = setTimeout(() => {
                 comboCount = 0;
             }, 2000);
@@ -556,6 +558,38 @@ document.addEventListener('DOMContentLoaded', () => {
             // Check if all sausage people are dead
             if (remainingSausagePeople <= 0) {
                 endGame(true);
+            }
+
+            if (gameMode === 'frenzy') {
+                // Extra effects for frenzy mode
+                createExplosiveEffect();
+                score += Math.floor(20 * frenzyMultiplier); // Double points
+                
+                // Chain reaction chance
+                if (Math.random() < 0.2) { // 20% chance
+                    const nearbySausages = sausagePeople.filter(s => {
+                        if (s.isDead) return false;
+                        const dx = s.x - closestSausagePerson.x;
+                        const dy = s.y - closestSausagePerson.y;
+                        return Math.sqrt(dx * dx + dy * dy) < 100;
+                    }).slice(0, 5); // Limit to 5 nearby sausages
+                    
+                    // Kill nearby sausages with delay
+                    nearbySausages.forEach((s, i) => {
+                        setTimeout(() => {
+                            if (!s.isDead) {
+                                s.element.classList.add('chain-death');
+                                s.isDead = true;
+                                s.speedX = 0;
+                                s.speedY = 0;
+                                remainingSausagePeople--;
+                                sausageCountElement.textContent = remainingSausagePeople;
+                                score += 5; // Bonus points for chain kills
+                                scoreElement.textContent = score;
+                            }
+                        }, i * 100);
+                    });
+                }
             }
         }
     }
@@ -915,5 +949,203 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 16);
         }
+    }
+
+    // Add new frenzy mode functions
+    function startFrenzyEffects() {
+        // Reset any existing effects
+        document.body.style.setProperty('--rainbow-speed', '2s');
+        frenzyMultiplier = 1;
+        
+        // Rainbow background intensity increases with score
+        const rainbowInterval = setInterval(() => {
+            if (!gameActive || gameMode !== 'frenzy') {
+                clearInterval(rainbowInterval);
+                document.body.style.setProperty('--rainbow-speed', '2s');
+                return;
+            }
+            
+            rainbowIntensity = Math.min(score / 1000, 1);
+            document.body.style.setProperty('--rainbow-speed', `${2 - rainbowIntensity}s`);
+        }, 100);
+
+        // Spawn random ketchup pools
+        const ketchupInterval = setInterval(() => {
+            if (!gameActive || gameMode !== 'frenzy') {
+                clearInterval(ketchupInterval);
+                return;
+            }
+            
+            // Limit number of ketchup pools
+            const existingPools = document.querySelectorAll('.ketchup-pool');
+            if (existingPools.length < 5) {
+                createKetchupPool();
+            }
+        }, 3000);
+
+        // Speed increases with score
+        const speedInterval = setInterval(() => {
+            if (!gameActive || gameMode !== 'frenzy') {
+                clearInterval(speedInterval);
+                return;
+            }
+            
+            // Calculate new multiplier
+            const newMultiplier = 1 + (score / 2000); // Max 2x speed at 2000 points
+            
+            // Only update if speed has actually changed
+            if (newMultiplier !== frenzyMultiplier) {
+                frenzyMultiplier = newMultiplier;
+                
+                // Reset and reapply speed to all sausages
+                sausagePeople.forEach(sausage => {
+                    if (!sausage.isDead) {
+                        // Reset to base speed first
+                        const baseSpeed = 2;
+                        const angle = Math.atan2(sausage.speedY, sausage.speedX);
+                        
+                        // Apply new speed
+                        sausage.speedX = Math.cos(angle) * baseSpeed * frenzyMultiplier;
+                        sausage.speedY = Math.sin(angle) * baseSpeed * frenzyMultiplier;
+                    }
+                });
+            }
+        }, 1000);
+    }
+
+    function createKetchupPool() {
+        const pool = document.createElement('div');
+        pool.className = 'ketchup-pool';
+        pool.style.width = `${Math.random() * 100 + 50}px`;
+        pool.style.height = pool.style.width;
+        
+        // Ensure pool is within bounds
+        const maxX = gameAreaWidth - parseInt(pool.style.width);
+        const maxY = gameAreaHeight - parseInt(pool.style.width);
+        pool.style.left = `${Math.random() * maxX}px`;
+        pool.style.top = `${Math.random() * maxY}px`;
+        
+        gameArea.appendChild(pool);
+        
+        // Make sausages slip in ketchup
+        const slipInterval = setInterval(() => {
+            if (!gameActive) {
+                clearInterval(slipInterval);
+                return;
+            }
+            
+            sausagePeople.forEach(sausage => {
+                if (!sausage.isDead && checkCollision(pool, sausage.element)) {
+                    if (!sausage.isSlipping) {
+                        sausage.isSlipping = true;
+                        sausage.element.classList.add('slipping');
+                        
+                        // Temporary speed boost
+                        const currentSpeed = Math.sqrt(sausage.speedX * sausage.speedX + sausage.speedY * sausage.speedY);
+                        const angle = Math.atan2(sausage.speedY, sausage.speedX);
+                        sausage.speedX = Math.cos(angle) * currentSpeed * 1.5;
+                        sausage.speedY = Math.sin(angle) * currentSpeed * 1.5;
+                        
+                        // Reset after leaving pool
+                        setTimeout(() => {
+                            if (!sausage.isDead) {
+                                sausage.isSlipping = false;
+                                sausage.element.classList.remove('slipping');
+                                sausage.speedX /= 1.5;
+                                sausage.speedY /= 1.5;
+                            }
+                        }, 500);
+                    }
+                }
+            });
+        }, 100);
+        
+        // Remove pool after some time
+        setTimeout(() => {
+            if (pool.parentNode) {
+                pool.remove();
+                clearInterval(slipInterval);
+            }
+        }, 5000);
+    }
+
+    function createExplosiveEffect() {
+        const explosion = document.createElement('div');
+        explosion.className = 'frenzy-explosion';
+        explosion.style.left = `${closestSausagePerson.x}px`;
+        explosion.style.top = `${closestSausagePerson.y}px`;
+        gameArea.appendChild(explosion);
+        
+        setTimeout(() => explosion.remove(), 1000);
+    }
+
+    // Add event listeners for mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Remove active class from all buttons
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            // Add active class to clicked button
+            btn.classList.add('active');
+            // Set selected mode
+            selectedMode = btn.dataset.mode;
+            gameMode = selectedMode;
+            
+            // Update instructions based on mode
+            updateModeInstructions(selectedMode);
+        });
+    });
+
+    // Add function to update instructions
+    function updateModeInstructions(mode) {
+        const instructions = document.querySelector('.instructions');
+        switch(mode) {
+            case 'frenzy':
+                instructions.innerHTML = `
+                    <p>FRENZY MODE: Double speed, 1000 sausages, 60 seconds!</p>
+                    <p><strong>Chain reactions will occur! Ketchup pools will appear!</strong></p>
+                    <p><em>The more you kill, the faster everything gets!</em></p>
+                `;
+                break;
+            case 'boss':
+                instructions.innerHTML = `
+                    <p>BOSS MODE: Fight giant sausage bosses!</p>
+                    <p><strong>Dodge mustard attacks and defeat the mega-sausages!</strong></p>
+                    <p><em>Each boss has special abilities!</em></p>
+                `;
+                break;
+            case 'survival':
+                instructions.innerHTML = `
+                    <p>SURVIVAL MODE: Endless waves of sausages!</p>
+                    <p><strong>Every wave brings more and tougher sausages!</strong></p>
+                    <p><em>Special sausages appear every 5th wave!</em></p>
+                `;
+                break;
+            default:
+                instructions.innerHTML = `
+                    <p>Use WASD or Arrow Keys to move. Get close to a sausage person and press Space or click "Cut Legs" to cut their legs.</p>
+                    <p><strong>WARNING: 500 SAUSAGES WILL RUN FOR THEIR LIVES!!! You have 2 minutes to cut them all!</strong></p>
+                    <p><em>Hold space to cut repeatedly!</em></p>
+                `;
+        }
+    }
+
+    // Modify the combo message creation in cutLegs function
+    function createComboMessage(count) {
+        const comboMsg = document.createElement('div');
+        comboMsg.className = 'combo-message';
+        comboMsg.textContent = `${count}x COMBO!`;
+        if (count > 10) comboMsg.classList.add('mega-combo');
+        gameArea.appendChild(comboMsg);
+        
+        // Add to active messages array
+        activeComboMessages.push(comboMsg);
+        
+        // Remove after 1 second
+        setTimeout(() => {
+            if (comboMsg.parentNode) {
+                comboMsg.remove();
+                activeComboMessages = activeComboMessages.filter(msg => msg !== comboMsg);
+            }
+        }, 1000);
     }
 }); 
