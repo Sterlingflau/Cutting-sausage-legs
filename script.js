@@ -1,33 +1,161 @@
-// Find and remove all sound-related code
-
-// 1. Remove any sound objects
-if (typeof sounds !== 'undefined') {
-    sounds = null;
-}
-
-// 2. Remove any background music references
-if (typeof bgMusic !== 'undefined') {
-    bgMusic = null;
-}
-if (typeof panicMusic !== 'undefined') {
-    panicMusic = null;
-}
-
-// 3. Create empty sound functions to replace any existing ones
-function playSound() {}
-function stopSound() {}
-function pauseSound() {}
-
-// 4. Override the Audio constructor to prevent new sound loading
-window.Audio = function() {
-    return {
-        play: function() {},
-        pause: function() {},
-        stop: function() {}
-    };
-};
-
 document.addEventListener('DOMContentLoaded', () => {
+    // 添加支付对话框相关变量
+    let isPaid = false;
+    let isFreeTrialMode = false;
+    
+    // 创建支付对话框
+    const paymentModal = document.createElement('div');
+    paymentModal.className = 'payment-modal';
+    paymentModal.innerHTML = `
+        <div class="payment-content">
+            <h2>请支付游戏费用</h2>
+            <p>享受无限乐趣，仅需支付 ¥19.99</p>
+            <div class="payment-options">
+                <button id="wechat-pay">微信支付</button>
+                <button id="alipay-pay">支付宝</button>
+            </div>
+            <button id="free-trial">免费试玩 (30秒)</button>
+        </div>
+    `;
+    document.body.appendChild(paymentModal);
+    
+    // 支付按钮事件
+    document.getElementById('wechat-pay').addEventListener('click', () => {
+        showQRCode('wechat');
+    });
+    
+    document.getElementById('alipay-pay').addEventListener('click', () => {
+        showQRCode('alipay');
+    });
+    
+    document.getElementById('free-trial').addEventListener('click', () => {
+        isPaid = true;
+        isFreeTrialMode = true;
+        paymentModal.style.display = 'none';
+        // 开始游戏但限制时间为30秒
+        gameTimeInSeconds = 30;
+        startGame();
+    });
+    
+    function showQRCode(type) {
+        const qrModal = document.createElement('div');
+        qrModal.className = 'qr-modal';
+        qrModal.innerHTML = `
+            <div class="qr-content">
+                <h3>${type === 'wechat' ? '微信支付' : '支付宝支付'}</h3>
+                <div class="qr-code">
+                    <div class="fake-qr"></div>
+                </div>
+                <p>请使用${type === 'wechat' ? '微信' : '支付宝'}扫描二维码完成支付</p>
+                <button id="payment-complete">我已完成支付</button>
+                <button id="cancel-payment">取消</button>
+            </div>
+        `;
+        document.body.appendChild(qrModal);
+        
+        document.getElementById('payment-complete').addEventListener('click', () => {
+            isPaid = true;
+            isFreeTrialMode = false;
+            qrModal.remove();
+            paymentModal.style.display = 'none';
+            gameTimeInSeconds = 120; // 付费用户获得完整的2分钟
+            startGame();
+        });
+        
+        document.getElementById('cancel-payment').addEventListener('click', () => {
+            qrModal.remove();
+        });
+    }
+    
+    // 修改startGame函数，添加支付检查
+    const originalStartGame = startGame;
+    startGame = function() {
+        if (!isPaid) {
+            paymentModal.style.display = 'flex';
+            return;
+        }
+        
+        // 重置游戏时间
+        if (isFreeTrialMode) {
+            gameTimeInSeconds = 30;
+            timeLeft = 30;
+        } else {
+            gameTimeInSeconds = 120;
+            timeLeft = 120;
+        }
+        
+        originalStartGame();
+        
+        // 如果是免费试玩模式，添加一个强制结束的计时器
+        if (isFreeTrialMode) {
+            setTimeout(() => {
+                if (gameActive) {
+                    endGame(false);
+                    
+                    // 显示支付提示
+                    const trialEndModal = document.createElement('div');
+                    trialEndModal.className = 'payment-modal';
+                    trialEndModal.innerHTML = `
+                        <div class="payment-content">
+                            <h2>试玩时间结束</h2>
+                            <p>您的免费试玩时间已结束。请支付 ¥19.99 继续游戏！</p>
+                            <div class="payment-options">
+                                <button id="wechat-pay-after-trial">微信支付</button>
+                                <button id="alipay-pay-after-trial">支付宝</button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(trialEndModal);
+                    
+                    document.getElementById('wechat-pay-after-trial').addEventListener('click', () => {
+                        trialEndModal.remove();
+                        showQRCode('wechat');
+                    });
+                    
+                    document.getElementById('alipay-pay-after-trial').addEventListener('click', () => {
+                        trialEndModal.remove();
+                        showQRCode('alipay');
+                    });
+                }
+            }, 30000); // 严格30秒后结束
+        }
+    };
+    
+    // 修改endGame函数，添加试玩结束逻辑
+    const originalEndGame = endGame;
+    endGame = function(victory) {
+        originalEndGame(victory);
+        
+        // 如果是免费试玩模式且游戏结束，显示支付提示
+        if (isFreeTrialMode) {
+            setTimeout(() => {
+                const trialEndModal = document.createElement('div');
+                trialEndModal.className = 'payment-modal';
+                trialEndModal.innerHTML = `
+                    <div class="payment-content">
+                        <h2>试玩已结束</h2>
+                        <p>想要继续享受游戏乐趣？请支付 ¥19.99 解锁完整版！</p>
+                        <div class="payment-options">
+                            <button id="wechat-pay-after-game">微信支付</button>
+                            <button id="alipay-pay-after-game">支付宝</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(trialEndModal);
+                
+                document.getElementById('wechat-pay-after-game').addEventListener('click', () => {
+                    trialEndModal.remove();
+                    showQRCode('wechat');
+                });
+                
+                document.getElementById('alipay-pay-after-game').addEventListener('click', () => {
+                    trialEndModal.remove();
+                    showQRCode('alipay');
+                });
+            }, 2000); // 游戏结束2秒后显示
+        }
+    };
+    
     // Game elements
     const gameArea = document.querySelector('.game-area');
     const player = document.getElementById('player');
@@ -63,33 +191,52 @@ document.addEventListener('DOMContentLoaded', () => {
     let canCut = true;
     let spaceHeld = false;
     let cutInterval;
-    let powerUps = {
-        chainsaw: false,
-        multiCut: false,
-        speedBoost: false,
-        timeFreeze: false
-    };
+    let powerUps = [];
+    let powerUpTypes = [
+        {type: 'speed', duration: 5000, color: '#00ff00', text: '2X SPEED'},
+        {type: 'range', duration: 5000, color: '#ff00ff', text: 'LONG REACH'},
+        {type: 'multiCut', duration: 5000, color: '#ffff00', text: 'MULTI CUT'}
+    ];
     let comboCount = 0;
     let comboTimer = null;
-    let gameMode = 'classic'; // classic, frenzy, boss, survival
-    let bossSpawned = false;
-    let difficultyMultiplier = 1;
-    let frenzyMultiplier = 1;
-    let frenzyComboTimer = null;
-    let rainbowIntensity = 0;
-    let selectedMode = 'classic';
-    let activeComboMessages = [];
-    let bossHealth = 100;
-    let bossPhase = 1;
-    let lastBossAttack = 0;
-    let bossAttackInterval = 3000; // 3 seconds between attacks
-    let waveNumber = 1;
-    let specialTypes = {
-        ninja: { speed: 2, color: '#000' },
-        explosive: { radius: 100, color: '#f00' },
-        tank: { health: 5, color: '#080' },
-        teleporter: { blinkCooldown: 2000, color: '#60f' },
-        splitter: { splits: 2, color: '#f90' }
+    let maxCombo = 0;
+    const sausageTypes = [
+        {type: 'normal', speed: 1, points: 10, color: '#ff6b6b'},
+        {type: 'fast', speed: 2, points: 20, color: '#ff4757'},
+        {type: 'tank', speed: 0.5, points: 30, color: '#ff7f50'}
+    ];
+
+    const achievements = [
+        {id: 'speed_demon', name: 'Speed Demon', condition: 'Kill 5 sausages in 2 seconds'},
+        {id: 'massacre', name: 'Massacre', condition: 'Get a 20x combo'},
+        {id: 'apocalypse', name: 'Apocalypse Master', condition: 'Win with 30 seconds remaining'}
+    ];
+
+    const sounds = {
+        cut: new Audio('cut.mp3'),
+        powerup: new Audio('powerup.mp3'),
+        scream: new Audio('scream.mp3'),
+        combo: new Audio('combo.mp3')
+    };
+
+    const stats = {
+        gamesPlayed: 0,
+        totalKills: 0,
+        bestTime: Infinity,
+        highestCombo: 0,
+        fastestKill: Infinity
+    };
+
+    const specialAbilities = {
+        dash: {
+            cooldown: 5000,
+            duration: 500,
+            speed: 20
+        },
+        timeFreeze: {
+            cooldown: 15000,
+            duration: 3000
+        }
     };
 
     // Game area dimensions
@@ -127,58 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear existing sausage people
         clearSausagePeople();
         
-        // Set up game based on mode
-        switch(gameMode) {
-            case 'frenzy':
-                // SUPER SPEED EVERYTHING
-                playerSpeed = 16;
-                gameTimeInSeconds = 60;
-                totalSausagePeople = 1000;
-                difficultyMultiplier = 2;
-                frenzyMultiplier = 1;
-                document.body.classList.add('rainbow-mode');
-                // Start the frenzy effects
-                startFrenzyEffects();
-                break;
-            
-            case 'boss':
-                // Boss battle setup
-                playerSpeed = 10;
-                gameTimeInSeconds = 180; // 3 minutes to defeat the boss
-                totalSausagePeople = 1; // Just the boss
-                remainingSausagePeople = 1;
-                bossHealth = 100;
-                bossPhase = 1;
-                spawnBossSausage();
-                break;
-            
-            case 'survival':
-                // Endless waves of chaos
-                totalSausagePeople = 200;  // Start with 200 sausages
-                gameTimeInSeconds = Infinity;
-                difficultyMultiplier = 1;
-                waveNumber = 1;
-                document.body.classList.add('survival-mode');
-                
-                // Generate initial wave with 50 explosive sausages
-                for (let i = 0; i < 150; i++) {  // 150 normal sausages
-                    createSausagePerson();
-                }
-                for (let i = 0; i < 50; i++) {   // 50 explosive sausages
-                    createSpecialSausage('explosive');
-                }
-                
-                startWaveSystem();
-                break;
-            
-            default: // classic mode
-                playerSpeed = 8;
-                gameTimeInSeconds = 120;
-                totalSausagePeople = 500;
-                difficultyMultiplier = 1;
-                document.body.classList.remove('rainbow-mode');
-        }
-        
         // Generate new sausage people
         generateSausagePeople();
         
@@ -197,9 +292,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Start game loop
         requestAnimationFrame(gameLoop);
-
-        // Add power-ups
-        setInterval(spawnPowerUp, 10000); // Spawn every 10 seconds
+        
+        spawnPowerUp(); // Start power-up spawning
     }
 
     // Start timer function
@@ -237,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Create a single sausage person
     function createSausagePerson() {
+        const type = sausageTypes[Math.floor(Math.random() * sausageTypes.length)];
         const sausageMan = document.createElement('div');
         sausageMan.className = 'sausage-man';
         
@@ -288,8 +383,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const speedX = (Math.random() - 0.5) * 2;
         const speedY = (Math.random() - 0.5) * 2;
         
-        // Create sausage object
-        const sausage = {
+        // Add to sausage people array with random speed and direction
+        sausagePeople.push({
             element: sausageMan,
             x: sausageX,
             y: sausageY,
@@ -298,14 +393,9 @@ document.addEventListener('DOMContentLoaded', () => {
             speedY: speedY,
             runningAway: false,
             legAnimationFrame: 0,
-            isWalking: true  // All sausages are walking from the start
-        };
-        
-        // Add to sausage people array
-        sausagePeople.push(sausage);
-        
-        // Return the sausage object
-        return sausage;
+            isWalking: true,  // All sausages are walking from the start
+            type: type
+        });
     }
 
     // Clear all sausage people
@@ -537,142 +627,89 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Cut the legs of the closest sausage person
     function cutLegs() {
+        sounds.cut.play();
         if (closestSausagePerson && !closestSausagePerson.isDead) {
-            if (closestSausagePerson.isBoss) {
-                bossHealth -= 1;
-                const healthFill = closestSausagePerson.element.querySelector('.health-fill');
-                const healthText = closestSausagePerson.element.querySelector('.health-text');
-                healthFill.style.width = `${bossHealth}%`;
-                healthText.textContent = `${bossHealth}/100`;
-                
-                // Visual feedback
-                closestSausagePerson.element.classList.add('boss-hit');
-                setTimeout(() => {
-                    closestSausagePerson.element.classList.remove('boss-hit');
-                }, 200);
-                
-                if (bossHealth <= 0) {
-                    bossDeath();
+            comboCount++;
+            score += 10 * (1 + Math.floor(comboCount / 5)); // More points for higher combos
+            updateComboDisplay();
+            
+            if (comboTimer) clearTimeout(comboTimer);
+            comboTimer = setTimeout(() => {
+                comboCount = 0;
+                updateComboDisplay();
+            }, 2000);
+            
+            // Animate the knife cutting
+            const knifeHand = player.querySelector('.knife-hand');
+            knifeHand.classList.add('cutting');
+            
+            // Remove the cutting class after animation completes
+            setTimeout(() => {
+                knifeHand.classList.remove('cutting');
+            }, 300);
+            
+            const leftLeg = closestSausagePerson.element.querySelector('.left-leg');
+            const rightLeg = closestSausagePerson.element.querySelector('.right-leg');
+            
+            // Get positions for the detached legs
+            const leftLegRect = leftLeg.getBoundingClientRect();
+            const rightLegRect = rightLeg.getBoundingClientRect();
+            const gameAreaRect = gameArea.getBoundingClientRect();
+            
+            // Create blood splatter effects
+            createBloodSplatter(leftLegRect.left - gameAreaRect.left, leftLegRect.top - gameAreaRect.top);
+            createBloodSplatter(rightLegRect.left - gameAreaRect.left, rightLegRect.top - gameAreaRect.top);
+            
+            // Create detached left leg
+            const detachedLeftLeg = document.createElement('div');
+            detachedLeftLeg.className = 'detached-leg';
+            detachedLeftLeg.style.left = `${leftLegRect.left - gameAreaRect.left}px`;
+            detachedLeftLeg.style.top = `${leftLegRect.top - gameAreaRect.top + 10}px`;
+            gameArea.appendChild(detachedLeftLeg);
+            
+            // Create detached right leg
+            const detachedRightLeg = document.createElement('div');
+            detachedRightLeg.className = 'detached-leg';
+            detachedRightLeg.style.left = `${rightLegRect.left - gameAreaRect.left}px`;
+            detachedRightLeg.style.top = `${rightLegRect.top - gameAreaRect.top + 10}px`;
+            gameArea.appendChild(detachedRightLeg);
+            
+            // Add cut class to original legs
+            leftLeg.classList.add('cut');
+            rightLeg.classList.add('cut');
+            
+            // Mark sausage person as dead and stop movement
+            closestSausagePerson.element.classList.add('dead');
+            closestSausagePerson.isDead = true;
+            closestSausagePerson.speedX = 0;
+            closestSausagePerson.speedY = 0;
+            closestSausagePerson.isWalking = false;
+            closestSausagePerson.runningAway = false;
+            
+            // Add scream effect
+            createScream(closestSausagePerson.x, closestSausagePerson.y);
+            
+            // Update score and count
+            scoreElement.textContent = score;
+            
+            remainingSausagePeople--;
+            sausageCountElement.textContent = remainingSausagePeople;
+            
+            cutButton.classList.add('hidden');
+            
+            // Remove detached legs after animation completes
+            setTimeout(() => {
+                if (detachedLeftLeg.parentNode) {
+                    detachedLeftLeg.parentNode.removeChild(detachedLeftLeg);
                 }
-                
-                score += 10;
-                scoreElement.textContent = score;
-            } else {
-                comboCount++;
-                clearTimeout(comboTimer);
-                
-                // Show combo message
-                createComboMessage(comboCount);
-                
-                // Reset combo after 2 seconds
-                comboTimer = setTimeout(() => {
-                    comboCount = 0;
-                }, 2000);
-                
-                // Animate the knife cutting
-                const knifeHand = player.querySelector('.knife-hand');
-                knifeHand.classList.add('cutting');
-                
-                // Remove the cutting class after animation completes
-                setTimeout(() => {
-                    knifeHand.classList.remove('cutting');
-                }, 300);
-                
-                const leftLeg = closestSausagePerson.element.querySelector('.left-leg');
-                const rightLeg = closestSausagePerson.element.querySelector('.right-leg');
-                
-                // Get positions for the detached legs
-                const leftLegRect = leftLeg.getBoundingClientRect();
-                const rightLegRect = rightLeg.getBoundingClientRect();
-                const gameAreaRect = gameArea.getBoundingClientRect();
-                
-                // Create blood splatter effects
-                createBloodSplatter(leftLegRect.left - gameAreaRect.left, leftLegRect.top - gameAreaRect.top);
-                createBloodSplatter(rightLegRect.left - gameAreaRect.left, rightLegRect.top - gameAreaRect.top);
-                
-                // Create detached left leg
-                const detachedLeftLeg = document.createElement('div');
-                detachedLeftLeg.className = 'detached-leg';
-                detachedLeftLeg.style.left = `${leftLegRect.left - gameAreaRect.left}px`;
-                detachedLeftLeg.style.top = `${leftLegRect.top - gameAreaRect.top + 10}px`;
-                gameArea.appendChild(detachedLeftLeg);
-                
-                // Create detached right leg
-                const detachedRightLeg = document.createElement('div');
-                detachedRightLeg.className = 'detached-leg';
-                detachedRightLeg.style.left = `${rightLegRect.left - gameAreaRect.left}px`;
-                detachedRightLeg.style.top = `${rightLegRect.top - gameAreaRect.top + 10}px`;
-                gameArea.appendChild(detachedRightLeg);
-                
-                // Add cut class to original legs
-                leftLeg.classList.add('cut');
-                rightLeg.classList.add('cut');
-                
-                // Mark sausage person as dead and stop movement
-                closestSausagePerson.element.classList.add('dead');
-                closestSausagePerson.isDead = true;
-                closestSausagePerson.speedX = 0;
-                closestSausagePerson.speedY = 0;
-                closestSausagePerson.isWalking = false;
-                closestSausagePerson.runningAway = false;
-                
-                // Add scream effect
-                createScream(closestSausagePerson.x, closestSausagePerson.y);
-                
-                // Update score and count
-                scoreElement.textContent = score;
-                
-                remainingSausagePeople--;
-                sausageCountElement.textContent = remainingSausagePeople;
-                
-                cutButton.classList.add('hidden');
-                
-                // Remove detached legs after animation completes
-                setTimeout(() => {
-                    if (detachedLeftLeg.parentNode) {
-                        detachedLeftLeg.parentNode.removeChild(detachedLeftLeg);
-                    }
-                    if (detachedRightLeg.parentNode) {
-                        detachedRightLeg.parentNode.removeChild(detachedRightLeg);
-                    }
-                }, 1000);
-                
-                // Check if all sausage people are dead
-                if (remainingSausagePeople <= 0) {
-                    endGame(true);
+                if (detachedRightLeg.parentNode) {
+                    detachedRightLeg.parentNode.removeChild(detachedRightLeg);
                 }
-
-                if (gameMode === 'frenzy') {
-                    // Extra effects for frenzy mode
-                    createExplosiveEffect();
-                    score += Math.floor(20 * frenzyMultiplier); // Double points
-                    
-                    // Chain reaction chance
-                    if (Math.random() < 0.2) { // 20% chance
-                        const nearbySausages = sausagePeople.filter(s => {
-                            if (s.isDead) return false;
-                            const dx = s.x - closestSausagePerson.x;
-                            const dy = s.y - closestSausagePerson.y;
-                            return Math.sqrt(dx * dx + dy * dy) < 100;
-                        }).slice(0, 5); // Limit to 5 nearby sausages
-                        
-                        // Kill nearby sausages with delay
-                        nearbySausages.forEach((s, i) => {
-                            setTimeout(() => {
-                                if (!s.isDead) {
-                                    s.element.classList.add('chain-death');
-                                    s.isDead = true;
-                                    s.speedX = 0;
-                                    s.speedY = 0;
-                                    remainingSausagePeople--;
-                                    sausageCountElement.textContent = remainingSausagePeople;
-                                    score += 5; // Bonus points for chain kills
-                                    scoreElement.textContent = score;
-                                }
-                            }, i * 100);
-                        });
-                    }
-                }
+            }, 1000);
+            
+            // Check if all sausage people are dead
+            if (remainingSausagePeople <= 0) {
+                endGame(true);
             }
         }
     }
@@ -839,764 +876,41 @@ document.addEventListener('DOMContentLoaded', () => {
     resetBtn.addEventListener('click', resetGame);
     playAgainBtn.addEventListener('click', startGame);
 
-    // Add function to create random power-ups
+    // New power-up functions
     function spawnPowerUp() {
-        const types = ['chainsaw', 'multiCut', 'speedBoost', 'timeFreeze'];
-        const powerUp = document.createElement('div');
-        powerUp.className = 'power-up';
-        powerUp.dataset.type = types[Math.floor(Math.random() * types.length)];
-        
-        // Random position
-        powerUp.style.left = `${Math.random() * (gameAreaWidth - 50)}px`;
-        powerUp.style.top = `${Math.random() * (gameAreaHeight - 50)}px`;
-        
-        gameArea.appendChild(powerUp);
-    }
-
-    // Add after sausage creation code
-    function createSausageBoss() {
-        const boss = createSausagePerson(); // Use existing function as base
-        boss.element.classList.add('sausage-boss');
-        boss.health = 100;
-        boss.isBoss = true;
-        
-        // Boss abilities
-        setInterval(() => {
-            if (boss.isDead) return;
-            // Shoot mustard projectiles
-            const projectile = document.createElement('div');
-            projectile.className = 'mustard-projectile';
-            projectile.style.left = boss.x + 'px';
-            projectile.style.top = boss.y + 'px';
-            gameArea.appendChild(projectile);
-        }, 2000);
-    }
-
-    function createSpecialSausage(type) {
-        // Create a sausage person first
-        const sausage = createSausagePerson();
-        
-        // Make sure sausage was created successfully
-        if (!sausage || !sausage.element) {
-            console.error("Failed to create special sausage:", type);
-            return null;
-        }
-        
-        // Add special type class
-        sausage.element.classList.add(`${type}-sausage`);
-        sausage.special = type;
-        
-        // Apply special properties based on type
-        const specs = specialTypes[type] || {};
-        
-        switch(type) {
-            case 'ninja':
-                sausage.speedX = (sausage.speedX || 0) * (specs.speed || 2);
-                sausage.speedY = (sausage.speedY || 0) * (specs.speed || 2);
-                break;
-            
-            case 'tank':
-                sausage.health = specs.health || 5;
-                sausage.element.style.transform = 'scale(1.5)';
-                break;
-            
-            case 'teleporter':
-                setInterval(() => {
-                    if (sausage && !sausage.isDead) {
-                        teleportSausage(sausage);
-                    }
-                }, (specs.blinkCooldown || 2000));
-                break;
-            
-            case 'splitter':
-                sausage.onDeath = () => {
-                    for (let i = 0; i < (specs.splits || 2); i++) {
-                        const mini = createSausagePerson();
-                        if (mini) {
-                            mini.element.style.transform = 'scale(0.7)';
-                            mini.x = sausage.x;
-                            mini.y = sausage.y;
-                        }
-                    }
-                };
-                break;
-            
-            case 'explosive':
-                sausage.onDeath = () => {
-                    // Create explosion effect
-                    createExplosion(sausage.x, sausage.y);
-                    
-                    // Find nearby sausages
-                    const nearbySausages = sausagePeople.filter(s => {
-                        if (s.isDead || s === sausage) return false;
-                        const dx = s.x - sausage.x;
-                        const dy = s.y - sausage.y;
-                        return Math.sqrt(dx*dx + dy*dy) < 100;
-                    });
-                    
-                    // Kill them with a delay for chain reaction effect
-                    nearbySausages.forEach((s, i) => {
-                        setTimeout(() => {
-                            if (!s.isDead) {
-                                s.isDead = true;
-                                s.element.classList.add('dead');
-                                remainingSausagePeople--;
-                                sausageCountElement.textContent = remainingSausagePeople;
-                                score += 5;
-                                scoreElement.textContent = score;
-                            }
-                        }, i * 100);
-                    });
-                };
-                break;
-        }
-        
-        return sausage;
-    }
-
-    // Helper function to create explosion effect
-    function createExplosion(x, y) {
-        const explosion = document.createElement('div');
-        explosion.className = 'explosion';
-        explosion.style.left = `${x}px`;
-        explosion.style.top = `${y}px`;
-        gameArea.appendChild(explosion);
-        
-        setTimeout(() => {
-            if (explosion.parentNode) {
-                explosion.remove();
-            }
-        }, 1000);
-    }
-
-    function teleportSausage(sausage) {
-        sausage.element.classList.add('teleporting');
-        
-        setTimeout(() => {
-            // Random new position
-            sausage.x = Math.random() * (gameAreaWidth - 50);
-            sausage.y = Math.random() * (gameAreaHeight - 100);
-            sausage.element.style.left = `${sausage.x}px`;
-            sausage.element.style.top = `${sausage.y}px`;
-            
-            sausage.element.classList.remove('teleporting');
-        }, 200);
-    }
-
-    // Add wave system for survival mode
-    function startWaveSystem() {
-        const waveInterval = setInterval(() => {
-            if (!gameActive) {
-                clearInterval(waveInterval);
-                return;
-            }
-            
-            // Epic wave announcement
-            announceWave(waveNumber);
-            
-            // Calculate wave difficulty
-            const baseCount = 30 + (waveNumber * 5);
-            difficultyMultiplier = 1 + (waveNumber * 0.1);
-            
-            // Special waves
-            if (waveNumber % 10 === 0) {
-                // Boss wave every 10th wave
-                spawnWaveBoss();
-            } else if (waveNumber % 5 === 0) {
-                // Special sausage wave every 5th wave
-                spawnSpecialWave(baseCount);
-            } else {
-                // Normal wave with some special sausages mixed in
-                spawnMixedWave(baseCount);
-            }
-            
-            waveNumber++;
-        }, 45000); // 45 seconds per wave
-    }
-
-    function announceWave(number) {
-        const msg = document.createElement('div');
-        msg.className = 'wave-message';
-        
-        let waveText = `WAVE ${number}`;
-        let waveClass = 'normal-wave';
-        
-        if (number % 10 === 0) {
-            waveText = `🔥 BOSS WAVE ${number} 🔥`;
-            waveClass = 'boss-wave';
-        } else if (number % 5 === 0) {
-            waveText = `⚡ SPECIAL WAVE ${number} ⚡`;
-            waveClass = 'special-wave';
-        }
-        
-        msg.textContent = waveText;
-        msg.classList.add(waveClass);
-        gameArea.appendChild(msg);
-        
-        // Wave effects
-        createWaveEffects(waveClass);
-        
-        setTimeout(() => msg.remove(), 3000);
-    }
-
-    function createWaveEffects(waveClass) {
-        // Screen shake
-        gameArea.classList.add('screen-shake');
-        setTimeout(() => gameArea.classList.remove('screen-shake'), 1000);
-        
-        // Particle effects
-        for (let i = 0; i < 20; i++) {
-            createParticle(waveClass);
+        if (gameActive) {
+            const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+            const powerUp = createPowerUp(type);
+            powerUps.push(powerUp);
+            setTimeout(spawnPowerUp, Math.random() * 10000 + 5000); // Spawn every 5-15 seconds
         }
     }
 
-    function spawnMixedWave(count) {
-        // 25% of new sausages should be explosive
-        const explosiveCount = Math.floor(count * 0.25);
-        const normalCount = count - explosiveCount;
-        
-        // Add normal sausages
-        for (let i = 0; i < normalCount; i++) {
-            createSausagePerson();
-        }
-        
-        // Add explosive sausages
-        for (let i = 0; i < explosiveCount; i++) {
-            createSpecialSausage('explosive');
-        }
-        
-        // Update counts
-        totalSausagePeople += count;
-        remainingSausagePeople += count;
-        sausageCountElement.textContent = remainingSausagePeople;
+    // Add to updateComboDisplay function
+    function updateComboDisplay() {
+        // Implementation of updateComboDisplay function
     }
 
-    function spawnWaveBoss() {
-        const boss = createSausagePerson();
-        boss.element.classList.add('sausage-boss');
-        boss.health = 100;
-        boss.isBoss = true;
-        boss.element.style.transform = 'scale(3)';
-        
-        // Add health bar
-        const healthBar = document.createElement('div');
-        healthBar.className = 'boss-health';
-        healthBar.innerHTML = '<div class="health-fill"></div>';
-        boss.element.appendChild(healthBar);
-        
-        // Boss attacks
-        const attackInterval = setInterval(() => {
-            if (!gameActive || boss.isDead) {
-                clearInterval(attackInterval);
-                return;
-            }
-            
-            // Random attack patterns
-            const attacks = [
-                () => shootMustard(boss),
-                () => sausageRain(boss),
-                () => groundPound(boss)
-            ];
-            
-            const randomAttack = attacks[Math.floor(Math.random() * attacks.length)];
-            randomAttack();
-        }, 3000);
-        
-        return boss;
+    function checkAchievements() {
+        // Check various conditions and award achievements
     }
 
-    // Boss attack patterns
-    function shootMustard(boss) {
-        for (let i = 0; i < 8; i++) {
-            const angle = (i * Math.PI * 2) / 8;
-            const projectile = document.createElement('div');
-            projectile.className = 'mustard-projectile';
-            projectile.style.left = `${boss.x + boss.element.offsetWidth/2}px`;
-            projectile.style.top = `${boss.y + boss.element.offsetHeight/2}px`;
-            
-            const speed = 5;
-            const velocityX = Math.cos(angle) * speed;
-            const velocityY = Math.sin(angle) * speed;
-            
-            gameArea.appendChild(projectile);
-            
-            const moveProjectile = setInterval(() => {
-                if (!gameActive) {
-                    clearInterval(moveProjectile);
-                    projectile.remove();
-                    return;
-                }
-                
-                const currentLeft = parseFloat(projectile.style.left);
-                const currentTop = parseFloat(projectile.style.top);
-                
-                projectile.style.left = `${currentLeft + velocityX}px`;
-                projectile.style.top = `${currentTop + velocityY}px`;
-                
-                // Check collision with player
-                if (checkCollision(projectile, player)) {
-                    playerDamage();
-                }
-                
-                // Remove if out of bounds
-                if (currentLeft < 0 || currentLeft > gameAreaWidth || 
-                    currentTop < 0 || currentTop > gameAreaHeight) {
-                    clearInterval(moveProjectile);
-                    projectile.remove();
-                }
-            }, 16);
-        }
-    }
+    const difficultyLevels = {
+        easy: {sausageCount: 300, timeLimit: 180, panicAt: 200},
+        normal: {sausageCount: 500, timeLimit: 120, panicAt: 400},
+        hard: {sausageCount: 700, timeLimit: 90, panicAt: 500}
+    };
 
-    // Add new frenzy mode functions
-    function startFrenzyEffects() {
-        // Reset any existing effects
-        document.body.style.setProperty('--rainbow-speed', '2s');
-        frenzyMultiplier = 1;
-        
-        // Rainbow background intensity increases with score
-        const rainbowInterval = setInterval(() => {
-            if (!gameActive || gameMode !== 'frenzy') {
-                clearInterval(rainbowInterval);
-                document.body.style.setProperty('--rainbow-speed', '2s');
-                return;
-            }
-            
-            rainbowIntensity = Math.min(score / 1000, 1);
-            document.body.style.setProperty('--rainbow-speed', `${2 - rainbowIntensity}s`);
-        }, 100);
+    // Add ability activation on specific key presses
 
-        // Spawn random ketchup pools
-        const ketchupInterval = setInterval(() => {
-            if (!gameActive || gameMode !== 'frenzy') {
-                clearInterval(ketchupInterval);
-                return;
-            }
-            
-            // Limit number of ketchup pools
-            const existingPools = document.querySelectorAll('.ketchup-pool');
-            if (existingPools.length < 5) {
-                createKetchupPool();
-            }
-        }, 3000);
-
-        // Speed increases with score
-        const speedInterval = setInterval(() => {
-            if (!gameActive || gameMode !== 'frenzy') {
-                clearInterval(speedInterval);
-                return;
-            }
-            
-            // Calculate new multiplier
-            const newMultiplier = 1 + (score / 2000); // Max 2x speed at 2000 points
-            
-            // Only update if speed has actually changed
-            if (newMultiplier !== frenzyMultiplier) {
-                frenzyMultiplier = newMultiplier;
-                
-                // Reset and reapply speed to all sausages
-                sausagePeople.forEach(sausage => {
-                    if (!sausage.isDead) {
-                        // Reset to base speed first
-                        const baseSpeed = 2;
-                        const angle = Math.atan2(sausage.speedY, sausage.speedX);
-                        
-                        // Apply new speed
-                        sausage.speedX = Math.cos(angle) * baseSpeed * frenzyMultiplier;
-                        sausage.speedY = Math.sin(angle) * baseSpeed * frenzyMultiplier;
-                    }
-                });
-            }
-        }, 1000);
-    }
-
-    function createKetchupPool() {
-        const pool = document.createElement('div');
-        pool.className = 'ketchup-pool';
-        pool.style.width = `${Math.random() * 100 + 50}px`;
-        pool.style.height = pool.style.width;
-        
-        // Ensure pool is within bounds
-        const maxX = gameAreaWidth - parseInt(pool.style.width);
-        const maxY = gameAreaHeight - parseInt(pool.style.width);
-        pool.style.left = `${Math.random() * maxX}px`;
-        pool.style.top = `${Math.random() * maxY}px`;
-        
-        gameArea.appendChild(pool);
-        
-        // Make sausages slip in ketchup
-        const slipInterval = setInterval(() => {
-            if (!gameActive) {
-                clearInterval(slipInterval);
-                return;
-            }
-            
-            sausagePeople.forEach(sausage => {
-                if (!sausage.isDead && checkCollision(pool, sausage.element)) {
-                    if (!sausage.isSlipping) {
-                        sausage.isSlipping = true;
-                        sausage.element.classList.add('slipping');
-                        
-                        // Temporary speed boost
-                        const currentSpeed = Math.sqrt(sausage.speedX * sausage.speedX + sausage.speedY * sausage.speedY);
-                        const angle = Math.atan2(sausage.speedY, sausage.speedX);
-                        sausage.speedX = Math.cos(angle) * currentSpeed * 1.5;
-                        sausage.speedY = Math.sin(angle) * currentSpeed * 1.5;
-                        
-                        // Reset after leaving pool
-                        setTimeout(() => {
-                            if (!sausage.isDead) {
-                                sausage.isSlipping = false;
-                                sausage.element.classList.remove('slipping');
-                                sausage.speedX /= 1.5;
-                                sausage.speedY /= 1.5;
-                            }
-                        }, 500);
-                    }
-                }
-            });
-        }, 100);
-        
-        // Remove pool after some time
-        setTimeout(() => {
-            if (pool.parentNode) {
-                pool.remove();
-                clearInterval(slipInterval);
-            }
-        }, 5000);
-    }
-
-    function createExplosiveEffect() {
-        const explosion = document.createElement('div');
-        explosion.className = 'frenzy-explosion';
-        explosion.style.left = `${closestSausagePerson.x}px`;
-        explosion.style.top = `${closestSausagePerson.y}px`;
-        gameArea.appendChild(explosion);
-        
-        setTimeout(() => explosion.remove(), 1000);
-    }
-
-    // Add event listeners for mode buttons
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Remove active class from all buttons
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            // Add active class to clicked button
-            btn.classList.add('active');
-            // Set selected mode
-            selectedMode = btn.dataset.mode;
-            gameMode = selectedMode;
-            
-            // Update instructions based on mode
-            updateModeInstructions(selectedMode);
+    function saveScore(score) {
+        const scores = JSON.parse(localStorage.getItem('scores') || '[]');
+        scores.push({
+            score,
+            date: new Date().toISOString(),
+            name: prompt('Enter your name:')
         });
-    });
-
-    // Add function to update instructions
-    function updateModeInstructions(mode) {
-        const instructions = document.querySelector('.instructions');
-        switch(mode) {
-            case 'frenzy':
-                instructions.innerHTML = `
-                    <p>FRENZY MODE: Double speed, 1000 sausages, 60 seconds!</p>
-                    <p><strong>Chain reactions will occur! Ketchup pools will appear!</strong></p>
-                    <p><em>The more you kill, the faster everything gets!</em></p>
-                `;
-                break;
-            case 'boss':
-                instructions.innerHTML = `
-                    <p>BOSS MODE: Fight giant sausage bosses!</p>
-                    <p><strong>Dodge mustard attacks and defeat the mega-sausages!</strong></p>
-                    <p><em>Each boss has special abilities!</em></p>
-                `;
-                break;
-            case 'survival':
-                instructions.innerHTML = `
-                    <p>SURVIVAL MODE: Endless waves of sausages!</p>
-                    <p><strong>Every wave brings more and tougher sausages!</strong></p>
-                    <p><em>Special sausages appear every 5th wave!</em></p>
-                `;
-                break;
-            default:
-                instructions.innerHTML = `
-                    <p>Use WASD or Arrow Keys to move. Get close to a sausage person and press Space or click "Cut Legs" to cut their legs.</p>
-                    <p><strong>WARNING: 500 SAUSAGES WILL RUN FOR THEIR LIVES!!! You have 2 minutes to cut them all!</strong></p>
-                    <p><em>Hold space to cut repeatedly!</em></p>
-                `;
-        }
-    }
-
-    // Modify the combo message creation in cutLegs function
-    function createComboMessage(count) {
-        const comboMsg = document.createElement('div');
-        comboMsg.className = 'combo-message';
-        comboMsg.textContent = `${count}x COMBO!`;
-        if (count > 10) comboMsg.classList.add('mega-combo');
-        gameArea.appendChild(comboMsg);
-        
-        // Add to active messages array
-        activeComboMessages.push(comboMsg);
-        
-        // Remove after 1 second
-        setTimeout(() => {
-            if (comboMsg.parentNode) {
-                comboMsg.remove();
-                activeComboMessages = activeComboMessages.filter(msg => msg !== comboMsg);
-            }
-        }, 1000);
-    }
-
-    function spawnBossSausage() {
-        const boss = document.createElement('div');
-        boss.className = 'sausage-man boss-sausage';
-        boss.innerHTML = `
-            <div class="boss-health-bar">
-                <div class="health-fill"></div>
-                <span class="health-text">100/100</span>
-            </div>
-            <div class="head"></div>
-            <div class="body"></div>
-            <div class="legs">
-                <div class="leg left-leg"></div>
-                <div class="leg right-leg"></div>
-            </div>
-        `;
-        
-        // Position in center
-        boss.style.left = `${gameAreaWidth/2 - 100}px`;
-        boss.style.top = `${gameAreaHeight/2 - 150}px`;
-        gameArea.appendChild(boss);
-        
-        // Add to sausage people array with special boss properties
-        sausagePeople = [{
-            element: boss,
-            x: gameAreaWidth/2 - 100,
-            y: gameAreaHeight/2 - 150,
-            isDead: false,
-            isBoss: true,
-            speedX: 0,
-            speedY: 0,
-            lastAttack: Date.now()
-        }];
-        
-        // Start boss AI
-        startBossAI();
-    }
-
-    function startBossAI() {
-        const bossAIInterval = setInterval(() => {
-            if (!gameActive || bossHealth <= 0) {
-                clearInterval(bossAIInterval);
-                return;
-            }
-            
-            const boss = sausagePeople[0];
-            const now = Date.now();
-            
-            // Change attack patterns based on health
-            if (now - lastBossAttack > bossAttackInterval) {
-                lastBossAttack = now;
-                
-                if (bossHealth > 66) { // Phase 1
-                    bossGroundPound();
-                } else if (bossHealth > 33) { // Phase 2
-                    bossPhase = 2;
-                    bossAttackInterval = 2500; // Faster attacks
-                    bossMustardSpray();
-                } else { // Phase 3
-                    bossPhase = 3;
-                    bossAttackInterval = 2000; // Even faster
-                    if (Math.random() < 0.5) {
-                        bossGroundPound();
-                    } else {
-                        bossMustardSpray();
-                    }
-                }
-            }
-            
-            // Move boss
-            moveBoss(boss);
-            
-        }, 100);
-    }
-
-    function moveBoss(boss) {
-        // Move towards player with increasing speed based on phase
-        const dx = playerX - boss.x;
-        const dy = playerY - boss.y;
-        const angle = Math.atan2(dy, dx);
-        const speed = 1 + (bossPhase * 0.5);
-        
-        boss.speedX = Math.cos(angle) * speed;
-        boss.speedY = Math.sin(angle) * speed;
-        
-        boss.x += boss.speedX;
-        boss.y += boss.speedY;
-        
-        // Update position
-        boss.element.style.left = `${boss.x}px`;
-        boss.element.style.top = `${boss.y}px`;
-    }
-
-    function bossGroundPound() {
-        const boss = sausagePeople[0];
-        boss.element.classList.add('ground-pound');
-        
-        // Create shockwave
-        const shockwave = document.createElement('div');
-        shockwave.className = 'shockwave';
-        shockwave.style.left = `${boss.x}px`;
-        shockwave.style.top = `${boss.y}px`;
-        gameArea.appendChild(shockwave);
-        
-        // Check if player is caught in shockwave
-        setTimeout(() => {
-            const dx = playerX - boss.x;
-            const dy = playerY - boss.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance < 200) {
-                stunPlayer(1000); // Stun player for 1 second
-            }
-            
-            shockwave.remove();
-            boss.element.classList.remove('ground-pound');
-        }, 1000);
-    }
-
-    function bossMustardSpray() {
-        const boss = sausagePeople[0];
-        boss.element.classList.add('mustard-attack');
-        
-        // Spray mustard in 8 directions
-        for (let i = 0; i < 8; i++) {
-            const angle = (i * Math.PI * 2) / 8;
-            shootMustard(boss.x, boss.y, angle);
-        }
-        
-        setTimeout(() => {
-            boss.element.classList.remove('mustard-attack');
-        }, 500);
-    }
-
-    function shootMustard(x, y, angle) {
-        const mustard = document.createElement('div');
-        mustard.className = 'mustard-projectile';
-        mustard.style.left = `${x}px`;
-        mustard.style.top = `${y}px`;
-        gameArea.appendChild(mustard);
-        
-        const speed = 5;
-        const mustardInterval = setInterval(() => {
-            const currentX = parseFloat(mustard.style.left);
-            const currentY = parseFloat(mustard.style.top);
-            
-            mustard.style.left = `${currentX + Math.cos(angle) * speed}px`;
-            mustard.style.top = `${currentY + Math.sin(angle) * speed}px`;
-            
-            // Check player collision
-            const dx = playerX - currentX;
-            const dy = playerY - currentY;
-            if (Math.sqrt(dx * dx + dy * dy) < 30) {
-                stunPlayer(500); // Stun for 0.5 seconds
-                mustard.remove();
-                clearInterval(mustardInterval);
-            }
-            
-            // Remove if out of bounds
-            if (currentX < 0 || currentX > gameAreaWidth || 
-                currentY < 0 || currentY > gameAreaHeight) {
-                mustard.remove();
-                clearInterval(mustardInterval);
-            }
-        }, 16);
-    }
-
-    function stunPlayer(duration) {
-        player.classList.add('stunned');
-        playerSpeed = 0;
-        setTimeout(() => {
-            player.classList.remove('stunned');
-            playerSpeed = gameMode === 'boss' ? 10 : 8;
-        }, duration);
-    }
-
-    function bossDeath() {
-        const boss = sausagePeople[0];
-        boss.isDead = true;
-        boss.element.classList.add('boss-death');
-        
-        // Create massive explosion
-        for (let i = 0; i < 20; i++) {
-            setTimeout(() => {
-                createExplosion(
-                    boss.x + Math.random() * 200 - 100,
-                    boss.y + Math.random() * 200 - 100
-                );
-            }, i * 100);
-        }
-        
-        setTimeout(() => {
-            endGame(true);
-        }, 2000);
-    }
-
-    function createParticle(type) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-        
-        // Different particle styles based on wave type
-        if (type === 'boss-wave') {
-            particle.classList.add('boss-particle');
-        } else if (type === 'special-wave') {
-            particle.classList.add('special-particle');
-        }
-        
-        // Random position
-        particle.style.left = `${Math.random() * gameAreaWidth}px`;
-        particle.style.top = `${Math.random() * gameAreaHeight}px`;
-        
-        // Random size
-        const size = Math.random() * 20 + 10;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        
-        // Random direction
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 5 + 2;
-        const vx = Math.cos(angle) * speed;
-        const vy = Math.sin(angle) * speed;
-        
-        gameArea.appendChild(particle);
-        
-        // Animate particle
-        const particleInterval = setInterval(() => {
-            if (!gameActive) {
-                clearInterval(particleInterval);
-                particle.remove();
-                return;
-            }
-            
-            const currentLeft = parseFloat(particle.style.left);
-            const currentTop = parseFloat(particle.style.top);
-            
-            particle.style.left = `${currentLeft + vx}px`;
-            particle.style.top = `${currentTop + vy}px`;
-            
-            // Remove if out of bounds
-            if (currentLeft < 0 || currentLeft > gameAreaWidth || 
-                currentTop < 0 || currentTop > gameAreaHeight) {
-                clearInterval(particleInterval);
-                particle.remove();
-            }
-        }, 16);
-        
-        // Remove after some time
-        setTimeout(() => {
-            clearInterval(particleInterval);
-            if (particle.parentNode) {
-                particle.remove();
-            }
-        }, 3000);
+        scores.sort((a, b) => b.score - a.score);
+        localStorage.setItem('scores', JSON.stringify(scores.slice(0, 10)));
     }
 }); 

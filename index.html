@@ -14,16 +14,6 @@
             <span>Sausage People Left: <span id="sausage-count">500</span></span>
             <span>Time Left: <span id="time-left">2:00</span></span>
         </div>
-        <div class="controls">
-            <button id="start-btn">Start Game</button>
-            <button id="reset-btn" disabled>Reset Game</button>
-            <div class="mode-select">
-                <button class="mode-btn" data-mode="classic">Classic Mode</button>
-                <button class="mode-btn" data-mode="frenzy">Frenzy Mode</button>
-                <button class="mode-btn" data-mode="boss">Boss Battle</button>
-                <button class="mode-btn" data-mode="survival">Survival Mode</button>
-            </div>
-        </div>
         <div class="game-area">
             <div id="player">
                 <div class="player-body"></div>
@@ -31,6 +21,10 @@
             </div>
             <div id="cut-button" class="hidden">Cut Legs (Space)</div>
             <!-- Sausage people will be generated via JavaScript -->
+        </div>
+        <div class="controls">
+            <button id="start-btn">Start Game</button>
+            <button id="reset-btn" disabled>Reset Game</button>
         </div>
         <div class="instructions">
             <p>Use WASD or Arrow Keys to move. Get close to a sausage person and press Space or click "Cut Legs" to cut their legs.</p>
